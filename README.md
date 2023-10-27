@@ -15,6 +15,8 @@ Portability: Easily manipulate this template to use with other tables or sources
 Application Sample Output
 
 ![alt text](https://raw.githubusercontent.com/nkolur2/streamlit-usage-app/main/stream1.webp)
+![alt text](https://raw.githubusercontent.com/nkolur2/streamlit-usage-app/main/stream2.webp)
+
 
 
 
