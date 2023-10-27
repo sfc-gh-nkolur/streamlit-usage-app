@@ -18,11 +18,11 @@ st.title("Snowflake Account Usage App :snowflake:")
 st.divider()
 
 #Sub heading info
-st.markdown("This app is developed utilizing queries against the Snowflake account usage schema in your Snowflake account. For detailed information please see the documentation page below.")
+st.markdown("This app is developed to go off of the account usage schema in your Snowflake account. For detailed information please see the documentation page below.")
 st.markdown("https://docs.snowflake.com/en/sql-reference/account-usage#account-usage-views")
 
 #Info bar 
-st.info('Developed by Nikhil Kolur & Ashish Patel on the Snowflake Sales Engineering Team. This is not a product of Snowflake please use at your own risk', icon="ℹ️")
+st.info('Developed by Nikhil Kolur & Ashish Patel on the Snowflake Sales Engineering Team. This is not a product of Snowflake please use at your own risk.', icon="ℹ️")
 st.divider()
 
 #############################################
@@ -69,16 +69,15 @@ with col5:
             st.session_state.ending = datetime.datetime.now()
 
 #Date Input
-date_input = st.date_input(
+date_input_filter = st.date_input(
     "",
     (st.session_state.starting,st.session_state.ending),
     min_date,
     max_date,
 )
 
-s,e = date_input
-
-
+#Start and End Date (s = start, e = end)
+s,e = date_input_filter
 
 st.divider()
 
@@ -275,12 +274,13 @@ st.plotly_chart(fig_execution_time, use_container_width=True)
 #     Credits Billed by Month
 #############################################
 
-credits_billed = "select date_trunc('MONTH', usage_date) as Usage_Month, sum(CREDITS_BILLED) from snowflake.account_usage.metering_daily_history group by Usage_Month"
+credits_billed = f"select date_trunc('MONTH', usage_date) as Usage_Month, sum(CREDITS_BILLED) from snowflake.account_usage.metering_daily_history group by Usage_Month"
 credits_billed_df = session.sql(credits_billed).to_pandas()
 #st.write(credits_billed_df)
 fig_credits_billed=px.bar(credits_billed_df,x='USAGE_MONTH',y='SUM(CREDITS_BILLED)', orientation='v',title="Credits Billed by Month")
 st.plotly_chart(fig_credits_billed, use_container_width=True)
 
+st.info('The above chart is static and not modified by the date range filter', icon="ℹ️")
 
 #############################################
 #  Top 10 Average Query Execution Time (By User)
@@ -302,50 +302,53 @@ gs_utilization = "select query_type, sum(credits_used_cloud_services) cs_credits
 gs_utilization_df = session.sql(gs_utilization).to_pandas()
 #st.write(gs_utilization_df)
 fig_gs_utilization=px.bar(gs_utilization_df,x='QUERY_TYPE',y='CS_CREDITS', orientation='v',title="GS Utilization by Query Type (Top 10)")
-st.plotly_chart(fig_gs_utilization)
+fig_gs_utilization.update_traces(marker_color='green')
 
 #############################################
-#     Compute and Cloud Services by Warehouse                 FIX THIS
+#     Top 10 Cloud Services by Warehouse                 
 #############################################
 
-compute_gs_by_warehouse = "select warehouse_name, sum(credits_used_cloud_services) credits_used_cloud_services, sum(credits_used_compute) credits_used_compute, sum(credits_used) credits_used from snowflake.account_usage.warehouse_metering_history where true group by 1 order by 2 desc limit 10"
+compute_gs_by_warehouse = "select warehouse_name, sum(credits_used_cloud_services) CREDITS_USED_CLOUD_SERVICES from snowflake.account_usage.warehouse_metering_history where true group by 1 order by 2 desc limit 10"
 compute_gs_by_warehouse_df = session.sql(compute_gs_by_warehouse).to_pandas()
 #st.write(compute_gs_by_warehouse_df)
-fig_compute_gs_by_warehouse=px.bar(compute_gs_by_warehouse_df,x='WAREHOUSE_NAME',y='CREDITS_USED', orientation='v',title="Compute and Cloud Services by Warehouse", barmode="group")
-#st.plotly_chart(fig_compute_gs_by_warehouse)
+fig_compute_gs_by_warehouse=px.bar(compute_gs_by_warehouse_df,x='WAREHOUSE_NAME',y='CREDITS_USED_CLOUD_SERVICES', orientation='v',title="Compute and Cloud Services by Warehouse", barmode="group")
+fig_compute_gs_by_warehouse.update_traces(marker_color='purple')
 
 #############################################
-#     Credit Breakdown by Day with Cloud Services Adjustment                FIX THIS
+#     Container 3: Cloud services
 #############################################
 
-credit_breakdown = "select * from snowflake.account_usage.metering_daily_history"
-credit_breakdown_df = session.sql(credit_breakdown).to_pandas()
-#st.write(credit_breakdown_df)
-fig_credit_breakdown=px.bar(credit_breakdown_df,x='USAGE_DATE',y='CREDITS_USED_COMPUTE', orientation='v',title="Credit Breakdown by Day with Cloud Services Adjustment", barmode="group")
-#st.plotly_chart(fig_credit_breakdown)
+container2 = st.container()
 
-
-
+with container2:
+    plot1, plot2 = st.columns(2)
+    with plot1:
+        st.plotly_chart(fig_gs_utilization, use_container_width=True)
+    with plot2:
+        st.plotly_chart(fig_compute_gs_by_warehouse, use_container_width=True)
+    
 #############################################
 #     Data Storage used Overtime                
 #############################################
 
 storage_overtime = "select date_trunc(month, usage_date) as usage_month, avg(storage_bytes + stage_bytes + failsafe_bytes) / power(1024, 4) as billable_tb, avg(storage_bytes) / power(1024, 4) as Storage_TB, avg(stage_bytes) / power(1024, 4) as Stage_TB, avg(failsafe_bytes) / power(1024, 4) as Failsafe_TB from snowflake.account_usage.storage_usage group by 1 order by 1"
 storage_overtime_df = session.sql(storage_overtime).to_pandas()
-#st.write(storage_overtime_df)
+
 fig_storage_overtime=px.bar(storage_overtime_df,x='USAGE_MONTH',y='BILLABLE_TB', orientation='v',title="Data Storage used Overtime", barmode="group")
 st.plotly_chart(fig_storage_overtime, use_container_width=True)
 
+st.info('The above chart is static and non modified by the date range filter', icon="ℹ️")
 
 #############################################
-#     Rows Loaded Overtime                    FIX THIS
+#     Rows Loaded Overtime (COPY INTO)                   
 #############################################
 
-#rows_loaded = "SELECT TO_CHAR(TO_DATE(load_history.LAST_LOAD_TIME),'YYYY-MM-DD') AS load_history.last_load_time_date COALESCE(SUM(load_history.ROW_COUNT),0) AS "load_history.total_row_count", FROM SNOWFLAKE.ACCOUNT_USAGE.LOAD_HISTORY AS load_history GROUP BY TO_DATE(load_history.LAST_LOAD_TIME) ORDER BY 1 DESC"
-#rows_loaded_df = session.sql(storage_overtime).to_pandas()
-#st.write(rows_loaded_df)
-#fig_rows_loaded=px.bar(rows_loaded_df,x='USAGE_MONTH',y='BILLABLE_TB', orientation='v',title="Data Storage used Overtime", barmode="group")
-#st.plotly_chart(fig_rows_loaded)
+rows_loaded = f"select to_timestamp(date_trunc(day,last_load_time)) as usage_date, sum(row_count) as total_rows from snowflake.account_usage.load_history where usage_date between '{s}' and '{e}' group by 1 order by usage_date desc"
+rows_loaded_df = session.sql(rows_loaded).to_pandas()
+
+fig_rows_loaded=px.line(rows_loaded_df,x='USAGE_DATE',y='TOTAL_ROWS', orientation='v',title="Rows Loaded Overtime (Copy Into)")
+st.plotly_chart(fig_rows_loaded, use_container_width=True)
+
 
 #############################################
 #     Logins by User               
@@ -353,10 +356,10 @@ st.plotly_chart(fig_storage_overtime, use_container_width=True)
 
 logins = "select user_name, sum(iff(is_success = 'NO', 1, 0)) as Failed, count(*) as Success, sum(iff(is_success = 'NO', 1, 0)) / nullif(count(*), 0) as login_failure_rate from snowflake.account_usage.login_history group by 1 order by 4 desc"
 logins_df = session.sql(logins).to_pandas()
-#st.write(logins_df)
+
 fig_logins=px.bar(logins_df,x='USER_NAME',y='SUCCESS', orientation='v',title="Logins by User", barmode="group")
 fig_logins.update_traces(marker_color='green')
-#st.plotly_chart(fig_logins)
+
 
 #############################################
 #     Logins by Client               
@@ -364,10 +367,9 @@ fig_logins.update_traces(marker_color='green')
 
 logins_client = "select reported_client_type as Client, user_name, sum(iff(is_success = 'NO', 1, 0)) as Failed, count(*) as Success, sum(iff(is_success = 'NO', 1, 0)) / nullif(count(*), 0) as login_failure_rate from snowflake.account_usage.login_history group by 1, 2 order by 5 desc"
 logins_client_df = session.sql(logins_client).to_pandas()
-#st.write(logins_df)
-fig_logins_client=px.bar(logins_client_df,x='CLIENT',y='SUCCESS', orientation='v',title="Logins by Client", barmode="group")
+
+fig_logins_client=px.bar(logins_client_df,x='CLIENT',y='SUCCESS', orientation='v',title="Logins by Client")
 fig_logins_client.update_traces(marker_color='purple')
-#st.plotly_chart(fig_logins_client)
 
 
 #############################################
@@ -383,15 +385,6 @@ with container_users:
     with plot2:
         st.plotly_chart(fig_compute_gs_by_warehouse, use_container_width=True)
 
-#############################################
-#     Query Acceleration (Top 10 Eligible)               
-#############################################
-
-#qas = "select *, timediff(seconds, START_TIME, END_TIME) as QUERY_DURATION from SNOWFLAKE.ACCOUNT_USAGE.QUERY_ACCELERATION_ELIGIBLE order by ELIGIBLE_QUERY_ACCELERATION_TIME desc;"
-#qas_df = session.sql(qas).to_pandas()
-#fig_qas=px.bar(qas_df,x='ELIGIBLE_QUERY_ACCELERATION_TIME',y='QUERY_TEXT', color = 'QUERY_ID' , orientation='h',title="QAS (Top 10 Eligible Queries)", barmode="group")
-#fig_qas.update_traces(marker_color='purple')
-#st.plotly_chart(fig_qas)
         
     
 #############################################
@@ -400,11 +393,13 @@ with container_users:
 st.divider()
 foot1, foot2, foot3 = st.columns([1,1,1])
 
+git_link = ""
 
 with foot1:
     st.markdown("Version 1.0")
 with foot2:
-    st.markdown("Test")
+    st.markdown("Github Link")
 with foot3:
     st.markdown("October 2023")
     
+
